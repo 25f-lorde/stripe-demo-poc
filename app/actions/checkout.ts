@@ -43,10 +43,10 @@ export async function createSubscriptionAction(priceId: string): Promise<Subscri
       .where(eq(users.id, user.id));
   }
 
-  // Check for existing active subscription in local DB (not Stripe API — saves 200ms)
+  // BUG FIX #4: Block checkout for active, trialing, AND past_due (not just active)
   const [existingSub] = await db.select().from(subscriptions)
     .where(eq(subscriptions.userId, user.id)).limit(1);
-  if (existingSub?.status === 'active') {
+  if (existingSub && ['active', 'trialing', 'past_due'].includes(existingSub.status)) {
     return { success: false, error: 'You already have an active subscription' };
   }
 

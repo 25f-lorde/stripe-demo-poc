@@ -8,7 +8,6 @@ import { stripe } from '@/lib/stripe/client';
 import { getCachedPrices } from '@/lib/stripe/plans';
 import { syncFromSubscription } from '@/lib/stripe/sync';
 import { revalidatePath } from 'next/cache';
-import type Stripe from 'stripe';
 
 type ActionResult =
   | { success: true }
@@ -36,7 +35,6 @@ export async function previewPlanChange(newPriceId: string): Promise<PreviewResu
   const data = await getAuthenticatedSubscription();
   if (!data) return { success: false, error: 'No active subscription' };
 
-  // Validate priceId
   const prices = await getCachedPrices();
   if (!prices.some((p) => p.id === newPriceId)) {
     return { success: false, error: 'Invalid plan' };
@@ -46,12 +44,16 @@ export async function previewPlanChange(newPriceId: string): Promise<PreviewResu
   const currentItem = stripeSub.items.data[0];
   if (!currentItem) return { success: false, error: 'No subscription item' };
 
+  // BUG FIX #2: Use explicit proration_date so preview matches actual charge
+  const prorationDate = Math.floor(Date.now() / 1000);
+
   const preview = await stripe.invoices.createPreview({
     customer: data.user.stripeCustomerId!,
     subscription: data.sub.stripeSubscriptionId,
     subscription_details: {
       items: [{ id: currentItem.id, price: newPriceId }],
       proration_behavior: 'create_prorations',
+      proration_date: prorationDate,
     },
   });
 
@@ -72,7 +74,11 @@ export async function confirmPlanChange(newPriceId: string): Promise<ActionResul
   const data = await getAuthenticatedSubscription();
   if (!data) return { success: false, error: 'No active subscription' };
 
-  // Validate priceId
+  // BUG FIX #3: Block plan change if subscription is set to cancel
+  if (data.sub.cancelAtPeriodEnd) {
+    return { success: false, error: 'Please reactivate your subscription before changing plans' };
+  }
+
   const prices = await getCachedPrices();
   if (!prices.some((p) => p.id === newPriceId)) {
     return { success: false, error: 'Invalid plan' };
@@ -82,14 +88,15 @@ export async function confirmPlanChange(newPriceId: string): Promise<ActionResul
   const currentItem = stripeSub.items.data[0];
   if (!currentItem) return { success: false, error: 'No subscription item' };
 
-  // Determine if upgrade or downgrade
   const currentPrice = currentItem.price.unit_amount ?? 0;
   const newPrice = prices.find((p) => p.id === newPriceId);
   const isUpgrade = (newPrice?.unit_amount ?? 0) > currentPrice;
 
+  // BUG FIX #2: Use fresh proration_date server-side (never from client)
   const updated = await stripe.subscriptions.update(data.sub.stripeSubscriptionId, {
     items: [{ id: currentItem.id, price: newPriceId }],
     proration_behavior: isUpgrade ? 'always_invoice' : 'create_prorations',
+    proration_date: Math.floor(Date.now() / 1000),
   });
 
   // Check if 3DS is required on the proration invoice

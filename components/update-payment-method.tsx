@@ -54,14 +54,20 @@ function UpdateForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    // Set as default payment method
-    if (setupIntent?.payment_method && typeof setupIntent.payment_method === 'string') {
-      const setResult = await setDefaultPaymentMethod(setupIntent.payment_method);
+    // BUG FIX #6: Handle payment_method as string OR object
+    const pmId = setupIntent?.payment_method;
+    const paymentMethodId = typeof pmId === 'string' ? pmId : pmId?.id;
+    if (paymentMethodId) {
+      const setResult = await setDefaultPaymentMethod(paymentMethodId);
       if (!setResult.success) {
         setError(setResult.error);
         setProcessing(false);
         return;
       }
+    } else {
+      setError('Payment method was saved but could not be set as default. Please refresh.');
+      setProcessing(false);
+      return;
     }
 
     toast.success('Payment method updated!');

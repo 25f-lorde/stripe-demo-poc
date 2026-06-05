@@ -3,8 +3,11 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { loadStripe } from '@stripe/stripe-js/pure';
 import { BillingToggle } from './billing-toggle';
 import { previewPlanChange, confirmPlanChange } from '@/app/actions/subscription';
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface Plan {
   name: string;
@@ -59,9 +62,22 @@ export function PlanSelector({ plans, currentPriceId, onClose }: PlanSelectorPro
         toast.error(result.error);
         return;
       }
+      // BUG FIX #5: Handle 3DS on upgrade proration invoice
       if ('requiresAction' in result && result.requiresAction) {
-        toast.error('Additional authentication required. Please try again.');
-        return;
+        const stripe = await stripePromise;
+        if (stripe) {
+          const { error } = await stripe.confirmPayment({
+            clientSecret: result.clientSecret,
+            confirmParams: {
+              return_url: `${window.location.origin}/dashboard/billing?sync=1`,
+            },
+            redirect: 'if_required',
+          });
+          if (error) {
+            toast.error(error.message ?? 'Authentication failed');
+            return;
+          }
+        }
       }
       toast.success('Plan updated!');
       onClose();

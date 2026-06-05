@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { db } from '@/lib/db/index';
 import { stripeEvents } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { syncStripeData } from './sync';
 
 const ALLOWED_EVENTS: Stripe.Event.Type[] = [
@@ -18,13 +19,12 @@ const ALLOWED_EVENTS: Stripe.Event.Type[] = [
 export async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   if (!ALLOWED_EVENTS.includes(event.type)) return;
 
-  // Atomic idempotency: insert returns nothing if event already exists
-  const [inserted] = await db.insert(stripeEvents).values({
-    eventId: event.id,
-    type: event.type,
-  }).onConflictDoNothing().returning();
-
-  if (!inserted) return; // Already processed
+  // Check if already processed (read-only check)
+  const [existing] = await db.select({ eventId: stripeEvents.eventId })
+    .from(stripeEvents)
+    .where(eq(stripeEvents.eventId, event.id))
+    .limit(1);
+  if (existing) return;
 
   const obj = event.data.object;
   const customerId = 'customer' in obj && typeof obj.customer === 'string'
@@ -36,5 +36,13 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     return;
   }
 
+  // Sync FIRST — if this throws, the event is NOT marked as processed,
+  // so Stripe will retry and we'll try again
   await syncStripeData(customerId);
+
+  // Only mark as processed AFTER successful sync
+  await db.insert(stripeEvents).values({
+    eventId: event.id,
+    type: event.type,
+  }).onConflictDoNothing();
 }
