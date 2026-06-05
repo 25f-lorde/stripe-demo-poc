@@ -1,26 +1,47 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-accent: oklch(0.78 0.18 180);
+  --color-accent-dim: oklch(0.78 0.18 180 / 0.15);
+  --color-accent-hover: oklch(0.85 0.16 180);
+  --color-surface: oklch(0.14 0.005 260);
+  --color-surface-raised: oklch(0.18 0.005 260);
+  --color-surface-overlay: oklch(0.22 0.005 260);
+  --color-border: oklch(0.28 0.005 260);
+
+  --color-status-active: oklch(0.75 0.18 155);
+  --color-status-trialing: oklch(0.72 0.15 250);
+  --color-status-past-due: oklch(0.7 0.2 25);
+  --color-status-canceling: oklch(0.8 0.15 85);
+  --color-status-canceled: oklch(0.55 0.02 260);
+
+  --font-display: var(--font-dm-serif);
+  --font-body: var(--font-instrument);
+  --font-mono: var(--font-jetbrains);
+
+  --animate-loading: loading 1.5s ease-in-out infinite;
+  --animate-fade-up: fadeUp 0.5s ease-out forwards;
+  --animate-draw: draw 0.5s ease-in-out forwards;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes loading {
+  0% { transform: scaleX(0); transform-origin: left; }
+  50% { transform: scaleX(1); transform-origin: left; }
+  51% { transform: scaleX(1); transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: #fafafa;
+  font-family: var(--font-body), system-ui, sans-serif;
 }
