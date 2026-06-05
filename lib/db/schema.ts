@@ -19,6 +19,7 @@ export const subscriptions = pgTable('subscriptions', {
   currentPeriodStart: timestamp('current_period_start').notNull(),
   currentPeriodEnd: timestamp('current_period_end').notNull(),
   cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
+  paymentMethodId: text('payment_method_id'),
   paymentMethodBrand: text('payment_method_brand'),
   paymentMethodLast4: text('payment_method_last4'),
   lastSyncedAt: timestamp('last_synced_at').defaultNow().notNull(),
