@@ -1,33 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
-import { useFormStatus } from 'react-dom';
-import { createCheckoutSession } from '@/app/actions/stripe';
-
-function SubmitButton({
-  recommended,
-  currentPlan,
-}: {
-  recommended?: boolean;
-  currentPlan?: boolean;
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={currentPlan || pending}
-      className={`mt-8 w-full rounded-xl py-3.5 text-sm font-medium transition-all ${
-        currentPlan
-          ? 'cursor-default border border-border text-zinc-500'
-          : recommended
-            ? 'bg-accent text-zinc-950 hover:bg-accent-hover disabled:opacity-50'
-            : 'border border-border text-zinc-200 hover:border-accent hover:text-zinc-100 disabled:opacity-50'
-      }`}
-    >
-      {pending ? 'Redirecting...' : currentPlan ? 'Current plan' : 'Get started'}
-    </button>
-  );
-}
+import Link from 'next/link';
 
 interface PricingCardProps {
   name: string;
@@ -35,7 +8,7 @@ interface PricingCardProps {
   interval: 'monthly' | 'annual';
   features: string[];
   recommended?: boolean;
-  priceId: string;
+  lookupKey: string;
   currentPlan?: boolean;
 }
 
@@ -45,10 +18,9 @@ export function PricingCard({
   interval,
   features,
   recommended,
-  priceId,
+  lookupKey,
   currentPlan,
 }: PricingCardProps) {
-  const submittingRef = useRef(false);
   const annualPrice = Math.round(price * 10);
   const displayPrice = interval === 'monthly' ? price : annualPrice;
 
@@ -104,19 +76,22 @@ export function PricingCard({
         ))}
       </ul>
 
-      <form
-        action={async () => {
-          if (submittingRef.current) return;
-          submittingRef.current = true;
-          try {
-            await createCheckoutSession(priceId);
-          } finally {
-            submittingRef.current = false;
-          }
-        }}
-      >
-        <SubmitButton recommended={recommended} currentPlan={currentPlan} />
-      </form>
+      {currentPlan ? (
+        <div className="mt-8 w-full rounded-xl border border-border py-3.5 text-center text-sm text-zinc-500">
+          Current plan
+        </div>
+      ) : (
+        <Link
+          href={`/checkout?plan=${lookupKey}`}
+          className={`mt-8 block w-full rounded-xl py-3.5 text-center text-sm font-medium transition-all ${
+            recommended
+              ? 'bg-accent text-zinc-950 hover:bg-accent-hover'
+              : 'border border-border text-zinc-200 hover:border-accent hover:text-zinc-100'
+          }`}
+        >
+          Get started
+        </Link>
+      )}
     </div>
   );
 }

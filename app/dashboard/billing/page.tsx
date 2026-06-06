@@ -6,7 +6,8 @@ import { syncStripeData } from '@/lib/stripe/sync';
 import { getCachedPrices, formatPrice } from '@/lib/stripe/plans';
 import { redirect } from 'next/navigation';
 import { StatusBadge } from '@/components/status-badge';
-import { ManageSubscriptionButton } from '@/components/manage-subscription-button';
+import { BillingActions } from './billing-actions';
+import { UpdatePaymentMethod } from '@/components/update-payment-method';
 import Link from 'next/link';
 
 async function getPlanName(priceId: string): Promise<string> {
@@ -18,6 +19,17 @@ async function getPlanName(priceId: string): Promise<string> {
   return `${formatted.productName} (${interval})`;
 }
 
+async function getAllPlans() {
+  const prices = await getCachedPrices();
+  return prices.map((p) => ({
+    name: formatPrice(p).productName,
+    priceId: p.id,
+    lookupKey: p.lookup_key ?? '',
+    amount: p.unit_amount ?? 0,
+    interval: p.recurring?.interval ?? 'month',
+  }));
+}
+
 export default async function BillingPage(props: {
   searchParams: Promise<{ sync?: string }>;
 }) {
@@ -25,15 +37,14 @@ export default async function BillingPage(props: {
   if (!session?.user?.id) redirect('/login');
 
   const params = await props.searchParams;
-
   const [user] = await db.select().from(users).where(eq(users.id, session.user.id)).limit(1);
 
-  // Sync on portal return to prevent stale UI
+  // Sync on portal/checkout return
   if (params.sync && user?.stripeCustomerId) {
     try {
       await syncStripeData(user.stripeCustomerId);
     } catch {
-      // Stripe might not be configured yet
+      // Stripe might not be configured
     }
     redirect('/dashboard/billing');
   }
@@ -42,9 +53,13 @@ export default async function BillingPage(props: {
     ? await db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)).limit(1)
     : [];
 
-  const isActive = sub?.status === 'active' || sub?.status === 'trialing';
+  // Show subscription card for active, trialing, AND past_due
+  const hasSubscription = sub && ['active', 'trialing', 'past_due'].includes(sub.status);
   const isCanceling = sub?.cancelAtPeriodEnd;
   const derivedStatus = isCanceling ? 'canceling' : (sub?.status ?? 'canceled');
+
+  const plans = hasSubscription ? await getAllPlans() : [];
+  const planName = sub ? await getPlanName(sub.stripePriceId) : '';
 
   return (
     <div>
@@ -55,7 +70,7 @@ export default async function BillingPage(props: {
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-status-past-due/20 bg-status-past-due/5 px-5 py-4">
           <p className="text-sm text-status-past-due">
             <span className="font-medium">Payment failed.</span>{' '}
-            Update your payment method to avoid service interruption.
+            Update your payment method below to continue your subscription.
           </p>
         </div>
       )}
@@ -66,9 +81,7 @@ export default async function BillingPage(props: {
             Your plan cancels on{' '}
             <span className="font-medium">
               {sub?.currentPeriodEnd.toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
+                month: 'long', day: 'numeric', year: 'numeric',
               })}
             </span>
             . You retain access until then.
@@ -76,18 +89,14 @@ export default async function BillingPage(props: {
         </div>
       )}
 
-      {/* Main card */}
-      {isActive && sub ? (
+      {/* Main subscription card */}
+      {hasSubscription && sub ? (
         <div className="mt-8 overflow-hidden rounded-2xl border border-border bg-surface">
           {/* Plan header */}
           <div className="flex items-center justify-between border-b border-border px-8 py-6">
             <div>
-              <p className="text-xs uppercase tracking-widest text-zinc-500">
-                Current plan
-              </p>
-              <p className="mt-1 font-display text-2xl text-zinc-100">
-                {await getPlanName(sub.stripePriceId)}
-              </p>
+              <p className="text-xs uppercase tracking-widest text-zinc-500">Current plan</p>
+              <p className="mt-1 font-display text-2xl text-zinc-100">{planName}</p>
             </div>
             <StatusBadge status={derivedStatus} />
           </div>
@@ -98,9 +107,7 @@ export default async function BillingPage(props: {
               <p className="text-xs text-zinc-500">Next billing date</p>
               <p className="mt-1 font-mono text-sm text-zinc-200">
                 {sub.currentPeriodEnd.toLocaleDateString('en-US', {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
+                  month: 'long', day: 'numeric', year: 'numeric',
                 })}
               </p>
             </div>
@@ -110,32 +117,18 @@ export default async function BillingPage(props: {
                 {isCanceling ? 'Canceling at period end' : sub.status}
               </p>
             </div>
-            {sub.paymentMethodBrand && (
-              <>
-                <div className="bg-surface px-8 py-5">
-                  <p className="text-xs text-zinc-500">Payment method</p>
-                  <p className="mt-1 text-sm capitalize text-zinc-200">
-                    {sub.paymentMethodBrand} **** {sub.paymentMethodLast4}
-                  </p>
-                </div>
-                <div className="bg-surface px-8 py-5">
-                  <p className="text-xs text-zinc-500">Started</p>
-                  <p className="mt-1 font-mono text-sm text-zinc-200">
-                    {sub.currentPeriodStart.toLocaleDateString('en-US', {
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </p>
-                </div>
-              </>
-            )}
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 border-t border-border px-8 py-5">
-            <ManageSubscriptionButton />
-          </div>
+          <BillingActions
+            plans={plans}
+            currentPriceId={sub.stripePriceId}
+            cancelAtPeriodEnd={sub.cancelAtPeriodEnd}
+            planName={planName}
+            accessUntil={sub.currentPeriodEnd.toLocaleDateString('en-US', {
+              month: 'long', day: 'numeric', year: 'numeric',
+            })}
+          />
         </div>
       ) : (
         /* Empty state */
@@ -147,9 +140,7 @@ export default async function BillingPage(props: {
             </svg>
           </div>
           <p className="mt-4 text-zinc-300">No active subscription</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            Choose a plan to get started.
-          </p>
+          <p className="mt-1 text-sm text-zinc-500">Choose a plan to get started.</p>
           <Link
             href="/pricing"
             className="mt-6 rounded-full bg-accent px-6 py-2.5 text-sm font-medium text-zinc-950 transition-all hover:bg-accent-hover"
@@ -157,6 +148,14 @@ export default async function BillingPage(props: {
             View plans
           </Link>
         </div>
+      )}
+
+      {/* Payment method section */}
+      {hasSubscription && sub && (
+        <UpdatePaymentMethod
+          currentBrand={sub.paymentMethodBrand}
+          currentLast4={sub.paymentMethodLast4}
+        />
       )}
     </div>
   );

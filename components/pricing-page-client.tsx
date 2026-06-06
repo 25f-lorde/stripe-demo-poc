@@ -55,25 +55,13 @@ interface PricingPageClientProps {
 export function PricingPageClient({ prices, currentPriceId }: PricingPageClientProps) {
   const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly');
 
-  // Map Stripe prices to plans by lookup key, then fallback to product name + interval
-  function getPriceId(planName: string): string {
+  function getLookupKey(planName: string): string {
     const suffix = interval === 'monthly' ? 'monthly' : 'annual';
-    const stripeInterval = interval === 'monthly' ? 'month' : 'year';
-    const lookupKey = `${planName.toLowerCase()}_${suffix}`;
+    return `${planName.toLowerCase()}_${suffix}`;
+  }
 
-    // First: exact lookup key match
-    const byLookup = prices.find((p) => p.lookupKey === lookupKey);
-    if (byLookup) return byLookup.priceId;
-
-    // Fallback: match by product name AND interval
-    const byName = prices.find(
-      (p) =>
-        p.productName.toLowerCase().includes(planName.toLowerCase()) &&
-        p.interval === stripeInterval
-    );
-    if (byName) return byName.priceId;
-
-    return `price_placeholder_${planName.toLowerCase()}`;
+  function getPriceIdForLookupKey(lookupKey: string): string | null {
+    return prices.find((p) => p.lookupKey === lookupKey)?.priceId ?? null;
   }
 
   return (
@@ -84,7 +72,8 @@ export function PricingPageClient({ prices, currentPriceId }: PricingPageClientP
 
       <div className="mt-16 grid gap-6 lg:grid-cols-3 lg:items-start">
         {PLANS.map((plan) => {
-          const priceId = getPriceId(plan.name);
+          const lookupKey = getLookupKey(plan.name);
+          const priceId = getPriceIdForLookupKey(lookupKey);
           return (
             <PricingCard
               key={plan.name}
@@ -93,8 +82,8 @@ export function PricingPageClient({ prices, currentPriceId }: PricingPageClientP
               interval={interval}
               features={plan.features}
               recommended={plan.recommended}
-              priceId={priceId}
-              currentPlan={currentPriceId === priceId}
+              lookupKey={lookupKey}
+              currentPlan={currentPriceId != null && currentPriceId === priceId}
             />
           );
         })}
