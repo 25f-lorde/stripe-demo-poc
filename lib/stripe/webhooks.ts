@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { db } from '@/lib/db/index';
 import { stripeEvents } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { revalidateTag } from 'next/cache';
 import { syncStripeData } from './sync';
 
 const ALLOWED_EVENTS: Stripe.Event.Type[] = [
@@ -39,6 +40,12 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   // Sync FIRST — if this throws, the event is NOT marked as processed,
   // so Stripe will retry and we'll try again
   await syncStripeData(customerId);
+
+  // Bust caches for invoice history and credit balance
+  if (['invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated'].includes(event.type)) {
+    revalidateTag(`invoices-${customerId}`);
+    revalidateTag(`credit-balance-${customerId}`);
+  }
 
   // Only mark as processed AFTER successful sync
   await db.insert(stripeEvents).values({

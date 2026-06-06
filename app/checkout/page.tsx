@@ -33,12 +33,6 @@ export default async function CheckoutPage(props: {
   const price = formatPrice(matchedPrice);
   const interval = matchedPrice.recurring?.interval === 'year' ? 'Annual' : 'Monthly';
 
-  // Get user's stripe customer ID
-  const [user] = await db.select({ stripeCustomerId: users.stripeCustomerId })
-    .from(users)
-    .where(eq(users.id, session.user.id))
-    .limit(1);
-
   // Plan features (same as pricing page)
   const features: Record<string, string[]> = {
     Starter: ['1 user included', '5 GB storage', 'Email support', 'Basic analytics'],
@@ -129,7 +123,6 @@ export default async function CheckoutPage(props: {
             <CheckoutClient
               priceId={matchedPrice.id}
               amount={matchedPrice.unit_amount ?? 0}
-              stripeCustomerId={user?.stripeCustomerId ?? null}
             />
           </div>
         </div>

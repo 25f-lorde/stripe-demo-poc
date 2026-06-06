@@ -6,13 +6,12 @@ import { CheckoutForm } from '@/components/checkout-form';
 interface CheckoutClientProps {
   priceId: string;
   amount: number;
-  stripeCustomerId: string | null;
 }
 
-export function CheckoutClient({ priceId, amount, stripeCustomerId }: CheckoutClientProps) {
+export function CheckoutClient({ priceId, amount }: CheckoutClientProps) {
   return (
     <StripeProvider mode="subscription" amount={amount}>
-      <CheckoutForm priceId={priceId} stripeCustomerId={stripeCustomerId} />
+      <CheckoutForm priceId={priceId} />
     </StripeProvider>
   );
 }

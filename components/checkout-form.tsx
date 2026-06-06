@@ -4,14 +4,13 @@ import { useState } from 'react';
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { createSubscriptionAction, syncAfterPayment } from '@/app/actions/checkout';
+import { createSubscriptionAction } from '@/app/actions/checkout';
 
 interface CheckoutFormProps {
   priceId: string;
-  stripeCustomerId: string | null;
 }
 
-export function CheckoutForm({ priceId, stripeCustomerId }: CheckoutFormProps) {
+export function CheckoutForm({ priceId }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();

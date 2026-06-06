@@ -4,10 +4,13 @@ import { users, subscriptions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { syncStripeData } from '@/lib/stripe/sync';
 import { getCachedPrices, formatPrice } from '@/lib/stripe/plans';
+import { getCachedCreditBalance } from '@/lib/stripe/balance';
+import { getCachedInvoices } from '@/lib/stripe/invoices';
 import { redirect } from 'next/navigation';
 import { StatusBadge } from '@/components/status-badge';
 import { BillingActions } from './billing-actions';
 import { UpdatePaymentMethod } from '@/components/update-payment-method';
+import { InvoiceHistory } from '@/components/invoice-history';
 import Link from 'next/link';
 
 async function getPlanName(priceId: string): Promise<string> {
@@ -60,6 +63,12 @@ export default async function BillingPage(props: {
 
   const plans = hasSubscription ? await getAllPlans() : [];
   const planName = sub ? await getPlanName(sub.stripePriceId) : '';
+
+  // Fetch credit balance and invoices in parallel (cached, ~0ms on hit)
+  const [creditBalance, invoiceList] = await Promise.all([
+    user?.stripeCustomerId ? getCachedCreditBalance(user.stripeCustomerId) : null,
+    user?.stripeCustomerId ? getCachedInvoices(user.stripeCustomerId) : [],
+  ]);
 
   return (
     <div>
@@ -156,6 +165,25 @@ export default async function BillingPage(props: {
           currentBrand={sub.paymentMethodBrand}
           currentLast4={sub.paymentMethodLast4}
         />
+      )}
+
+      {/* Credit balance */}
+      {creditBalance && (
+        <div className="mt-12">
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface px-8 py-6">
+            <p className="font-mono text-2xl font-light text-accent">
+              ${(creditBalance.amount / 100).toFixed(2)} <span className="text-sm text-zinc-400">credit</span>
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Automatically applied to your next invoice.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice history */}
+      {user?.stripeCustomerId && (
+        <InvoiceHistory invoices={invoiceList} />
       )}
     </div>
   );

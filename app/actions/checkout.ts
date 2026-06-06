@@ -6,7 +6,7 @@ import { users, subscriptions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { stripe } from '@/lib/stripe/client';
 import { getCachedPrices } from '@/lib/stripe/plans';
-import { syncFromSubscription } from '@/lib/stripe/sync';
+import { syncStripeData } from '@/lib/stripe/sync';
 import { revalidatePath } from 'next/cache';
 import type Stripe from 'stripe';
 
@@ -83,20 +83,13 @@ export async function createSubscriptionAction(priceId: string): Promise<Subscri
   };
 }
 
-export async function syncAfterPayment(stripeCustomerId: string): Promise<void> {
-  const subs = await stripe.subscriptions.list({
-    customer: stripeCustomerId,
-    limit: 1,
-    status: 'all',
-    expand: ['data.default_payment_method'],
-  });
+export async function syncAfterPayment(): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) return;
 
-  const sub = subs.data[0];
-  if (!sub) return;
+  const [user] = await db.select().from(users).where(eq(users.id, session.user.id)).limit(1);
+  if (!user?.stripeCustomerId) return;
 
-  const [user] = await db.select().from(users).where(eq(users.stripeCustomerId, stripeCustomerId)).limit(1);
-  if (!user) return;
-
-  await syncFromSubscription(sub, user.id);
+  await syncStripeData(user.stripeCustomerId);
   revalidatePath('/dashboard/billing');
 }
