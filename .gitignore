@@ -61,3 +61,4 @@ prisma/dev.db-journal
 # sqlite (if used locally)
 *.db
 *.db-journal
+test-results/
